@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: kuryr-cni-ds
+  namespace: kube-system
+  labels:
+    tier: node
+    app: kuryr-cni
+spec:
+  selector:
+    matchLabels:
+      app: kuryr-cni
+  template:
+    metadata:
+      labels:
+        tier: node
+        app: kuryr-cni
+    spec:
+      hostNetwork: true
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        operator: Exists
+        effect: NoSchedule
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoSchedule"
+      serviceAccountName: kuryr-controller
+      containers:
+      - name: kuryr-cni
+        image: kuryr/cni:latest
+        imagePullPolicy: Never
+        command: [ "cni_ds_init" ]
+        env:
+        - name: KUBERNETES_NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: KURYR_CNI_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: bin
+          mountPath: /opt/cni/bin
+        - name: net-conf
+          mountPath: /etc/cni/net.d
+        - name: config-volume
+          mountPath: /etc/kuryr
+        - name: proc
+          mountPath: /host_proc
+        - name: var-pci
+          mountPath: /var/pci_address
+        readinessProbe:
+                #  httpGet:
+                # path: /ready
+          tcpSocket:
+            port: 8090
+            # scheme: HTTP
+          initialDelaySeconds: 60
+          timeoutSeconds: 10
+        livenessProbe:
+                # httpGet:
+                # path: /alive
+          tcpSocket:
+            port: 8090
+          initialDelaySeconds: 60
+      volumes:
+        - name: bin
+          hostPath:
+            path: /opt/cni/bin
+        - name: net-conf
+          hostPath:
+            path: /etc/cni/net.d
+        - name: config-volume
+          configMap:
+            name: kuryr-config
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: var-pci
+          hostPath:
+            path: /var/pci_address
+

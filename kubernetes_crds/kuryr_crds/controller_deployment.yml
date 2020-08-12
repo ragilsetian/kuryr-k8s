@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    name: kuryr-controller
+  name: kuryr-controller
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: kuryr-controller
+  template:
+    metadata:
+      labels:
+        name: kuryr-controller
+      name: kuryr-controller
+    spec:
+      serviceAccountName: kuryr-controller
+      automountServiceAccountToken: true
+      hostNetwork: true
+      containers:
+      - image: kuryr/controller:latest
+        imagePullPolicy: Never
+        name: controller
+        terminationMessagePath: "/dev/termination-log"
+        volumeMounts:
+        - name: config-volume
+          mountPath: "/etc/kuryr"
+        - name: certificates-volume
+          mountPath: "/etc/ssl/certs"
+          readOnly: true
+        readinessProbe:
+                #  httpGet:
+                # path: /ready
+                #
+          tcpSocket:
+            port: 8082
+            # scheme: HTTP
+          timeoutSeconds: 5
+        livenessProbe:
+                #httpGet:
+                # path: /alive
+          tcpSocket:
+            port: 8082
+          initialDelaySeconds: 15
+      volumes:
+      - name: config-volume
+        configMap:
+          name: kuryr-config
+      - name: certificates-volume
+        secret:
+          secretName: kuryr-certificates
+      restartPolicy: Always
+      tolerations:
+      - key: "node-role.kubernetes.io/master"
+        operator: "Exists"
+        effect: "NoSchedule"
+      - key: "node.kubernetes.io/not-ready"
+        operator: "Exists"
+        effect: "NoSchedule"
+
